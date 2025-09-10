@@ -63,10 +63,19 @@ def sugerir_tratamiento():
         # Combinar riesgo e impacto para formar la entrada completa para obtener_tratamiento
         entrada_tratamiento = f"{activo.strip()};{riesgo.strip()};{impacto.strip()}"
         tratamiento = obtener_tratamiento(entrada_tratamiento)
-        if "Error" in tratamiento:
+        if isinstance(tratamiento, str) and "Error" in tratamiento:
             return jsonify({"error": tratamiento}), 500
-
-        return jsonify({"activo": activo, "riesgo": riesgo, "impacto": impacto, "tratamiento": tratamiento})
+        elif isinstance(tratamiento, dict):
+            return jsonify({
+                "activo": activo,
+                "riesgo": riesgo,
+                "impacto": impacto,
+                "condicion": tratamiento.get("condicion", ""),
+                "recomendacion": tratamiento.get("recomendacion", ""),
+                "riesgo_adicional": tratamiento.get("riesgo", "")
+            })
+        else:
+            return jsonify({"error": "Respuesta inesperada del modelo"}), 500
     except Exception as e:
         logging.error(f"Error en /sugerir-tratamiento: {str(e)}")
         return jsonify({"error": "Error interno del servidor"}), 500
@@ -78,17 +87,38 @@ def obtener_tratamiento(entrada_tratamiento):
         response = client.chat.completions.create(
             model="ramiro:instruct",
             messages=[
-                {"role": "system", "content": "Eres un experto en gestión de riesgos según ISO 27001. Responde en español. El usuario proporcionará un activo tecnológico, un riesgo y un impacto separados por ';'. Debes sugerir un tratamiento práctico y específico en menos de 200 caracteres. Sé conciso y enfócate en medidas preventivas o correctivas."},
+                {"role": "system", "content": "Eres un experto en gestión de riesgos según ISO 27001. Responde en español. El usuario proporcionará un activo tecnológico, un riesgo y un impacto separados por ';'. Debes responder en el siguiente formato estructurado:\n\nCondición: [Situación encontrada en el activo]\nRecomendación: [Acción correctiva o preventiva]\nRiesgo: Probabilidad [Baja/Media/Alta]\n\nSé conciso y enfócate en medidas prácticas."},
                 {"role": "user", "content": "mi telefono movil;Acceso no autorizado;un atacante puede acceder a la información personal y confidencial almacenada en el teléfono móvil, como números de teléfono, correos electrónicos y contraseñas"},
-                {"role": "assistant", "content": "Establecer un bloqueo de la pantalla de inicio que requiera autenticación con contraseña o huella digital"},
+                {"role": "assistant", "content": "Condición: Acceso no autorizado al teléfono móvil permitiendo la exposición de datos personales.\nRecomendación: Establecer un bloqueo de la pantalla de inicio que requiera autenticación con contraseña o huella digital.\nRiesgo: Probabilidad Alta"},
                 {"role": "user", "content": "servidor web;Inyección SQL;un atacante puede ejecutar consultas maliciosas en la base de datos, comprometiendo la integridad de los datos"},
-                {"role": "assistant", "content": "Implementar validación de entradas y uso de prepared statements en consultas SQL"},
+                {"role": "assistant", "content": "Condición: Vulnerabilidad a inyección SQL en el servidor web que permite ejecución de consultas maliciosas.\nRecomendación: Implementar validación de entradas y uso de prepared statements en consultas SQL.\nRiesgo: Probabilidad Media"},
                 {"role": "user", "content": entrada_tratamiento}
             ]
         )
         answer = response.choices[0].message.content
         logging.info(f"Tratamiento generado: {answer}")
-        return answer
+
+        # Parsear la respuesta para extraer Condición, Recomendación y Riesgo
+        patron_condicion = r'Condición:\s*(.*?)(?=\nRecomendación:|$)'
+        patron_recomendacion = r'Recomendación:\s*(.*?)(?=\nRiesgo:|$)'
+        patron_riesgo = r'Riesgo:\s*Probabilidad\s*(Baja|Media|Alta)'
+
+        match_condicion = re.search(patron_condicion, answer, re.DOTALL)
+        match_recomendacion = re.search(patron_recomendacion, answer, re.DOTALL)
+        match_riesgo = re.search(patron_riesgo, answer)
+
+        if match_condicion and match_recomendacion and match_riesgo:
+            condicion = match_condicion.group(1).strip()
+            recomendacion = match_recomendacion.group(1).strip()
+            riesgo = match_riesgo.group(1).strip()
+            return {
+                "condicion": condicion,
+                "recomendacion": recomendacion,
+                "riesgo": riesgo
+            }
+        else:
+            logging.error(f"No se pudo parsear la respuesta: {answer}")
+            return "Error al parsear la respuesta del modelo. Intente nuevamente."
     except Exception as e:
         logging.error(f"Error al obtener tratamiento: {str(e)}")
         return "Error interno al generar tratamiento. Intente nuevamente."

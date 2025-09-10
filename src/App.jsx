@@ -125,7 +125,10 @@ const App = () => {
     activo: '',
     riesgo: '',
     impacto: '',
-    tratamiento: ''
+    tratamiento: '',
+    condicion: '',
+    recomendacion: '',
+    riesgo_adicional: ''
   });
 
   // Show modal for adding new asset
@@ -177,21 +180,27 @@ const App = () => {
       activo,
       riesgo,
       impacto,
-      tratamiento: '-'
+      tratamiento: '-',
+      condicion: '',
+      recomendacion: '',
+      riesgo_adicional: ''
     };
-    
+
     // Add the single row to the dataSource
     setDataSource([...dataSource, newRow]);
-    
+
     // Increment count by 1
     setCount(count + 1);
-    
+
     // Reset form
     setNewData({
       activo: '',
       riesgo: '',
       impacto: '',
-      tratamiento: ''
+      tratamiento: '',
+      condicion: '',
+      recomendacion: '',
+      riesgo_adicional: ''
     });
   };
 
@@ -244,25 +253,43 @@ const App = () => {
     {
       title: 'Activo',
       dataIndex: 'activo',
-      width: '15%',
+      width: '10%',
       editable: true,
     },
     {
       title: 'Riesgo',
       dataIndex: 'riesgo',
-      width: '20%',
+      width: '15%',
       editable: true,
     },
     {
       title: 'Impacto',
       dataIndex: 'impacto',
-      width: '30%',
+      width: '15%',
       editable: true,
     },
     {
       title: 'Tratamiento',
       dataIndex: 'tratamiento',
-      width: '30%',
+      width: '15%',
+      editable: true,
+    },
+    {
+      title: 'Condición',
+      dataIndex: 'condicion',
+      width: '10%',
+      editable: true,
+    },
+    {
+      title: 'Recomendación',
+      dataIndex: 'recomendacion',
+      width: '15%',
+      editable: true,
+    },
+    {
+      title: 'Riesgo',
+      dataIndex: 'riesgo_adicional',
+      width: '10%',
       editable: true,
     },
     {
