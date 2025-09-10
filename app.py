@@ -9,6 +9,13 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 app = Flask(__name__)
 
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
+
 # Ruta para servir el index.html desde la carpeta dist
 @app.route('/',  methods=["GET",'POST'])
 def serve_index():
@@ -85,9 +92,9 @@ def obtener_tratamiento(entrada_tratamiento):
     try:
         logging.info(f"Solicitando tratamiento para: {entrada_tratamiento}")
         response = client.chat.completions.create(
-            model="ramiro:instruct",
+            model="llama2:7b",
             messages=[
-                {"role": "system", "content": "Eres un experto en gestión de riesgos según ISO 27001. Responde en español. El usuario proporcionará un activo tecnológico, un riesgo y un impacto separados por ';'. Debes responder en el siguiente formato estructurado:\n\nCondición: [Situación encontrada en el activo]\nRecomendación: [Acción correctiva o preventiva]\nRiesgo: Probabilidad [Baja/Media/Alta]\n\nSé conciso y enfócate en medidas prácticas."},
+                {"role": "system", "content": "Eres un experto en gestión de riesgos según ISO 27001. Responde en español. El usuario proporcionará un activo tecnológico, un riesgo y un impacto separados por ';'. Debes responder en el siguiente formato estructurado:\n\nCondición: [Situación encontrada en el activo, describe detalladamente la condición actual]\nRecomendación: [Acción correctiva o preventiva específica y detallada]\nRiesgo: Probabilidad [Baja/Media/Alta]\n\nProporciona descripciones detalladas y completas, enfocándote en medidas prácticas y efectivas."},
                 {"role": "user", "content": "mi telefono movil;Acceso no autorizado;un atacante puede acceder a la información personal y confidencial almacenada en el teléfono móvil, como números de teléfono, correos electrónicos y contraseñas"},
                 {"role": "assistant", "content": "Condición: Acceso no autorizado al teléfono móvil permitiendo la exposición de datos personales.\nRecomendación: Establecer un bloqueo de la pantalla de inicio que requiera autenticación con contraseña o huella digital.\nRiesgo: Probabilidad Alta"},
                 {"role": "user", "content": "servidor web;Inyección SQL;un atacante puede ejecutar consultas maliciosas en la base de datos, comprometiendo la integridad de los datos"},
@@ -126,9 +133,9 @@ def obtener_riesgos(activo):
     try:
         logging.info(f"Solicitando riesgos para: {activo}")
         response = client.chat.completions.create(
-            model="ramiro:instruct",
+            model="llama2:7b",
             messages=[
-                {"role": "system", "content": "Eres un experto en gestión de riesgos según ISO 27001. Responde en español. El usuario proporcionará un activo tecnológico. Debes responder con exactamente 5 riesgos asociados, cada uno en formato: **Riesgo**: Descripción del impacto. Sé específico, conciso y enfócate en amenazas reales."},
+                {"role": "system", "content": "Eres un experto en gestión de riesgos según ISO 27001. Responde en español. El usuario proporcionará un activo tecnológico. Debes responder con exactamente 5 riesgos asociados, cada uno en formato: Riesgo: Descripción del impacto. Sé específico, conciso y enfócate en amenazas reales. Lista los riesgos uno por línea."},
                 {"role": "user", "content": "mi raspberry pi"},
                 {"role": "assistant", "content": """• **Acceso no autorizado**: terceros pueden acceder a la información almacenada o procesada en el Raspberry Pi sin permiso, lo que podría llevar a la revelación de datos confidenciales.
 
@@ -154,7 +161,7 @@ def obtener_riesgos(activo):
         )
         answer = response.choices[0].message.content
         logging.info(f"Riesgos generados: {answer}")
-        patron = r'\*\*\s*(.+?)\*\*:\s*(.+?)\.(?=\s*\n|\s*$)'
+        patron = r'(?:•\s*)?\*\*\s*(.+?)\*\*:\s*(.+?)\.(?=\s*\n|\s*$)'
 
         # Buscamos todos los patrones en la respuesta
         resultados = re.findall(patron, answer)
@@ -163,10 +170,13 @@ def obtener_riesgos(activo):
         riesgos = [resultado[0] for resultado in resultados]
         impactos = [resultado[1] for resultado in resultados]
 
-        if len(riesgos) != 5 or len(impactos) != 5:
-            logging.warning("Número de riesgos/impactos no coincide con 5. Revisar respuesta del modelo.")
-            # Intentar parsear de otra forma o devolver error
+        if len(riesgos) < 5 or len(impactos) < 5:
+            logging.warning("Número de riesgos/impactos menor a 5.")
             return [], []
+
+        # Tomar los primeros 5 si hay más
+        riesgos = riesgos[:5]
+        impactos = impactos[:5]
 
         return riesgos, impactos
     except Exception as e:

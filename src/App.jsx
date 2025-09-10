@@ -147,8 +147,8 @@ const App = () => {
     setDataSource(newData);
   };
 
-  // Handle adding new asset (mock API call)
-  const handleOk = () => {
+  // Handle adding new asset (real API call)
+  const handleOk = async () => {
     if (!newData.activo.trim()) {
       message.error('Por favor ingresa un nombre de activo');
       return;
@@ -156,20 +156,27 @@ const App = () => {
 
     setIsLoading(true);
 
-    // Mock API call with timeout
-    setTimeout(() => {
-      // Generate mock risks and impacts (but only use the first one)
-      const mockRiesgo = `Pérdida de ${newData.activo}`;
-      const mockImpacto = `Pérdida de información valiosa relacionada con ${newData.activo}`;
+    try {
+      const response = await axios.post('http://172.30.106.27:5500/analizar-riesgos', {
+        activo: newData.activo.trim()
+      });
 
-      // Add a single row for this asset
-      addNewRow(newData.activo, mockRiesgo, mockImpacto);
-      
+      const { riesgos, impactos } = response.data;
+
+      // Add rows for each risk and impact
+      riesgos.forEach((riesgo, index) => {
+        addNewRow(newData.activo.trim(), riesgo, impactos[index]);
+      });
+
       setIsModalVisible(false);
       setIsLoading(false);
       setSuggestEnabled(true);
       message.success(`Activo "${newData.activo}" agregado con éxito`);
-    }, 1000);
+    } catch (error) {
+      console.error('Error al analizar riesgos:', error);
+      message.error('Error al analizar riesgos. Inténtalo de nuevo.');
+      setIsLoading(false);
+    }
   };
 
   // Add a single new row to the table
@@ -204,36 +211,39 @@ const App = () => {
     });
   };
 
-  // Handle recommendation of treatments (mock API call)
-  const handleRecommendTreatment = () => {
+  // Handle recommendation of treatments (real API call)
+  const handleRecommendTreatment = async () => {
     if (dataSource.length === 0) {
       message.warning('No hay riesgos para recomendar tratamientos');
       return;
     }
 
     setIsRecommending(true);
-    
-    // Mock API call with timeout
-    setTimeout(() => {
-      const treatments = [
-        'Implementación de controles de acceso físico',
-        'Copias de seguridad periódicas',
-        'Cifrado de datos sensibles',
-        'Capacitación de personal sobre seguridad',
-        'Implementación de firewall de nueva generación',
-        'Monitoreo continuo de accesos',
-        'Desarrollo de políticas de seguridad'
-      ];
-      
-      const newDataSource = dataSource.map(item => ({
-        ...item,
-        tratamiento: treatments[Math.floor(Math.random() * treatments.length)]
-      }));
-      
+
+    try {
+      const promises = dataSource.map(async (item) => {
+        const response = await axios.post('http://172.30.106.27:5500/sugerir-tratamiento', {
+          activo: item.activo,
+          riesgo: item.riesgo,
+          impacto: item.impacto
+        });
+        return {
+          ...item,
+          condicion: response.data.condicion,
+          recomendacion: response.data.recomendacion,
+          riesgo_adicional: response.data.riesgo_adicional
+        };
+      });
+
+      const newDataSource = await Promise.all(promises);
       setDataSource(newDataSource);
       setIsRecommending(false);
       message.success('Tratamientos recomendados con éxito');
-    }, 1500);
+    } catch (error) {
+      console.error('Error al recomendar tratamientos:', error);
+      message.error('Error al recomendar tratamientos. Inténtalo de nuevo.');
+      setIsRecommending(false);
+    }
   };
 
   // Handle save after cell edit
